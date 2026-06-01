@@ -75,8 +75,54 @@ export function isFocusable(component: Component | null): component is Component
  * This is a zero-width escape sequence that terminals ignore.
  * Components emit this at the cursor position when focused.
  * TUI finds and strips this marker, then positions the hardware cursor there.
+ *
+ * Invariant: a focused component must emit CURSOR_MARKER immediately followed by
+ * the reverse-video cursor cell (REVERSE_VIDEO_ON + grapheme + REVERSE_VIDEO_OFF),
+ * with no other escape sequence in between. stripCursorMarker() relies on this
+ * adjacency to unwrap the cell when the hardware cursor is active; an interposed
+ * SGR would leave the painted cursor in place alongside the hardware cursor.
  */
 export const CURSOR_MARKER = "\x1b_pi:c\x07";
+
+/**
+ * SGR codes wrapping the cursor cell that components emit immediately after
+ * CURSOR_MARKER. REVERSE_VIDEO_ON enables inverse video (the "fake" cursor);
+ * REVERSE_VIDEO_OFF disables only inverse video, leaving other attributes intact.
+ */
+export const REVERSE_VIDEO_ON = "\x1b[7m";
+export const REVERSE_VIDEO_OFF = "\x1b[27m";
+
+/**
+ * Strip CURSOR_MARKER from a rendered line. When unwrapReverseVideo is true (the
+ * hardware cursor is active), also remove the reverse-video wrapper around the
+ * marker-adjacent cursor cell so the terminal's own cursor provides the
+ * highlight instead of the painted "fake" cursor. Width-neutral: only the
+ * zero-width marker and SGR codes are removed, never the grapheme/space.
+ * Returns the transformed line plus the index the marker occupied (so callers
+ * can measure the column without rescanning), or null if no marker is present.
+ */
+export function stripCursorMarker(
+	line: string,
+	unwrapReverseVideo: boolean,
+): { line: string; markerIndex: number } | null {
+	const markerIndex = line.indexOf(CURSOR_MARKER);
+	if (markerIndex === -1) return null;
+	const beforeMarker = line.slice(0, markerIndex);
+	let afterMarker = line.slice(markerIndex + CURSOR_MARKER.length);
+	if (unwrapReverseVideo && afterMarker.startsWith(REVERSE_VIDEO_ON)) {
+		const afterReverseOn = afterMarker.slice(REVERSE_VIDEO_ON.length);
+		const reverseOffIndex = afterReverseOn.indexOf(REVERSE_VIDEO_OFF);
+		if (reverseOffIndex === -1) {
+			// No closing REVERSE_VIDEO_OFF: drop only the opening wrapper.
+			afterMarker = afterReverseOn;
+		} else {
+			const cursorGrapheme = afterReverseOn.slice(0, reverseOffIndex);
+			const afterReverseOff = afterReverseOn.slice(reverseOffIndex + REVERSE_VIDEO_OFF.length);
+			afterMarker = cursorGrapheme + afterReverseOff;
+		}
+	}
+	return { line: beforeMarker + afterMarker, markerIndex };
+}
 
 export { visibleWidth };
 
@@ -1191,15 +1237,13 @@ export abstract class TuiBase extends Container implements TUI {
 		const viewportTop = Math.max(0, lines.length - height);
 		for (let row = lines.length - 1; row >= viewportTop; row--) {
 			const line = lines[row];
-			const markerIndex = line.indexOf(CURSOR_MARKER);
-			if (markerIndex !== -1) {
+			// Strip the marker. When the hardware cursor is active, also unwrap the
+			// reverse-video cursor cell so the terminal's own cursor shows instead.
+			const stripped = stripCursorMarker(line, this.showHardwareCursor);
+			if (stripped !== null) {
 				// Calculate visual column (width of text before marker)
-				const beforeMarker = line.slice(0, markerIndex);
-				const col = visibleWidth(beforeMarker);
-
-				// Strip marker from the line
-				lines[row] = line.slice(0, markerIndex) + line.slice(markerIndex + CURSOR_MARKER.length);
-
+				const col = visibleWidth(line.slice(0, stripped.markerIndex));
+				lines[row] = stripped.line;
 				return { row, col };
 			}
 		}
