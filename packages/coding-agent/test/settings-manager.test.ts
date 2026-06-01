@@ -354,6 +354,43 @@ describe("SettingsManager", () => {
 		});
 	});
 
+	describe("hardware cursor", () => {
+		// pi-tui reads no environment; this resolver is where PI_HARDWARE_CURSOR is honored,
+		// and the result is injected into the renderer.
+		const withEnv = (value: string | undefined, run: () => void) => {
+			const previous = process.env.PI_HARDWARE_CURSOR;
+			if (value === undefined) delete process.env.PI_HARDWARE_CURSOR;
+			else process.env.PI_HARDWARE_CURSOR = value;
+			try {
+				run();
+			} finally {
+				if (previous === undefined) delete process.env.PI_HARDWARE_CURSOR;
+				else process.env.PI_HARDWARE_CURSOR = previous;
+			}
+		};
+
+		it("is on unless PI_HARDWARE_CURSOR=0 opts out", () => {
+			withEnv(undefined, () => {
+				expect(SettingsManager.inMemory().getShowHardwareCursor()).toBe(true);
+			});
+			withEnv("1", () => {
+				expect(SettingsManager.inMemory().getShowHardwareCursor()).toBe(true);
+			});
+			withEnv("0", () => {
+				expect(SettingsManager.inMemory().getShowHardwareCursor()).toBe(false);
+			});
+		});
+
+		it("lets an explicit setting win over the env var", () => {
+			withEnv("0", () => {
+				expect(SettingsManager.inMemory({ showHardwareCursor: true }).getShowHardwareCursor()).toBe(true);
+			});
+			withEnv("1", () => {
+				expect(SettingsManager.inMemory({ showHardwareCursor: false }).getShowHardwareCursor()).toBe(false);
+			});
+		});
+	});
+
 	describe("retry settings", () => {
 		it("defaults and overrides agent retry delay cap", () => {
 			expect(SettingsManager.inMemory().getRetrySettings()).toEqual({

@@ -574,7 +574,10 @@ export abstract class TuiBase extends Container implements TUI {
 	setShowHardwareCursor(enabled: boolean): void {
 		if (this.showHardwareCursor === enabled) return;
 		this.showHardwareCursor = enabled;
-		if (!enabled) {
+		if (enabled) {
+			this.terminal.setCursorStyle("steady-block");
+		} else {
+			this.terminal.setCursorStyle("default");
 			this.terminal.hideCursor();
 		}
 		this.requestRender();
@@ -933,6 +936,10 @@ export abstract class TuiBase extends Container implements TUI {
 		if (this.terminalColorSchemeNotificationsEnabled) {
 			this.terminal.write("\x1b[?2031h");
 		}
+		if (this.showHardwareCursor) {
+			// Steady block matches the prior painted-cursor look and avoids blink.
+			this.terminal.setCursorStyle("steady-block");
+		}
 		this.queryCellSize();
 		this.requestRender();
 	}
@@ -982,6 +989,10 @@ export abstract class TuiBase extends Container implements TUI {
 			this.terminal.write("\x1b[?2031l");
 		}
 		this.beforeTerminalStop(options);
+		if (this.showHardwareCursor) {
+			// Restore the terminal's configured cursor shape for the shell.
+			this.terminal.setCursorStyle("default");
+		}
 		this.terminal.showCursor();
 		this.terminal.stop();
 		this.afterTerminalStop(options);
