@@ -387,7 +387,10 @@ export abstract class TuiBase extends Container implements TUI {
 	private renderTimer: NodeJS.Timeout | undefined;
 	private lastRenderAt = 0;
 	private static readonly MIN_RENDER_INTERVAL_MS = 16;
-	private showHardwareCursor = process.env.PI_HARDWARE_CURSOR === "1";
+	// Hardware cursor on by default so the terminal owns cursor presentation
+	// (shape, blink, hollow-on-blur). Opt out with PI_HARDWARE_CURSOR=0 for
+	// terminals that mishandle it (e.g. some JetBrains IDE terminals).
+	private showHardwareCursor = process.env.PI_HARDWARE_CURSOR !== "0";
 	private clearOnShrink = process.env.PI_CLEAR_ON_SHRINK === "1";
 	protected fullRedrawCount = 0;
 	protected stopped = false;
@@ -438,7 +441,10 @@ export abstract class TuiBase extends Container implements TUI {
 	setShowHardwareCursor(enabled: boolean): void {
 		if (this.showHardwareCursor === enabled) return;
 		this.showHardwareCursor = enabled;
-		if (!enabled) {
+		if (enabled) {
+			this.terminal.setCursorStyle("steady-block");
+		} else {
+			this.terminal.setCursorStyle("default");
 			this.terminal.hideCursor();
 		}
 		this.requestRender();
@@ -753,6 +759,10 @@ export abstract class TuiBase extends Container implements TUI {
 		if (this.terminalColorSchemeNotificationsEnabled) {
 			this.terminal.write("\x1b[?2031h");
 		}
+		if (this.showHardwareCursor) {
+			// Steady block matches the prior painted-cursor look and avoids blink.
+			this.terminal.setCursorStyle("steady-block");
+		}
 		this.queryCellSize();
 		this.requestRender();
 	}
@@ -802,6 +812,10 @@ export abstract class TuiBase extends Container implements TUI {
 			this.terminal.write("\x1b[?2031l");
 		}
 		this.beforeTerminalStop(options);
+		if (this.showHardwareCursor) {
+			// Restore the terminal's configured cursor shape for the shell.
+			this.terminal.setCursorStyle("default");
+		}
 		this.terminal.showCursor();
 		this.terminal.stop();
 		this.afterTerminalStop(options);

@@ -228,15 +228,21 @@ The TUI appends a full SGR reset and OSC 8 reset at the end of each rendered lin
 Components that display a text cursor and need IME (Input Method Editor) support should implement the `Focusable` interface:
 
 ```typescript
-import { CURSOR_MARKER, type Component, type Focusable } from "@earendil-works/pi-tui";
+import {
+  CURSOR_MARKER,
+  type Component,
+  type Focusable,
+  REVERSE_VIDEO_OFF,
+  REVERSE_VIDEO_ON,
+} from "@earendil-works/pi-tui";
 
 class MyInput implements Component, Focusable {
   focused: boolean = false;  // Set by TUI when focus changes
   
   render(width: number): string[] {
     const marker = this.focused ? CURSOR_MARKER : "";
-    // Emit marker right before the fake cursor
-    return [`> ${beforeCursor}${marker}\x1b[7m${atCursor}\x1b[27m${afterCursor}`];
+    // Emit marker immediately before the reverse-video cursor cell
+    return [`> ${beforeCursor}${marker}${REVERSE_VIDEO_ON}${atCursor}${REVERSE_VIDEO_OFF}${afterCursor}`];
   }
 }
 ```
@@ -245,9 +251,9 @@ When a `Focusable` component has focus, TUI:
 1. Sets `focused = true` on the component
 2. Scans rendered output for `CURSOR_MARKER` (a zero-width APC escape sequence)
 3. Positions the hardware terminal cursor at that location
-4. Shows the hardware cursor only when `showHardwareCursor` is enabled
+4. When `showHardwareCursor` is enabled (the default), shows the hardware cursor and strips the marker-adjacent reverse-video wrapper so the terminal's own cursor provides the highlight; when disabled, hides the hardware cursor and leaves the reverse-video ("painted") cursor as a fallback
 
-The cursor remains hidden by default. This keeps the fake cursor rendering, while still positioning the hardware cursor for terminals that track IME candidate windows with hidden cursors. Some terminals require a visible hardware cursor for IME positioning; enable it with the renderer constructor's `showHardwareCursor` argument, `setShowHardwareCursor(true)`, or `PI_HARDWARE_CURSOR=1`. The `Editor` and `Input` built-in components already implement this interface.
+Cursor presentation is owned entirely by the TUI: components always emit `CURSOR_MARKER` plus a reverse-video cursor cell, and the TUI decides which cursor the user sees. The hardware cursor is on by default so the terminal owns cursor shape, blink, and hollow-on-blur; opt out with the renderer constructor's `showHardwareCursor` argument, `setShowHardwareCursor(false)`, or `PI_HARDWARE_CURSOR=0` for terminals that mishandle it. The `Editor` and `Input` built-in components already implement this interface.
 
 **Container components with embedded inputs:** When a container component (dialog, selector, etc.) contains an `Input` or `Editor` child, the container must implement `Focusable` and propagate the focus state to the child:
 

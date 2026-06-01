@@ -22,7 +22,11 @@ export async function selectConfig(options: ConfigSelectorOptions): Promise<void
 	initTheme(options.settingsManager.getTheme(), true);
 
 	return new Promise((resolve) => {
-		const ui: TUI = new TuiMainScreen(new ProcessTerminal(), undefined, options.agentDir);
+		const ui: TUI = new TuiMainScreen(
+			new ProcessTerminal(),
+			options.settingsManager.getShowHardwareCursor(),
+			options.agentDir,
+		);
 		let resolved = false;
 
 		const selector = new ConfigSelectorComponent(

@@ -127,6 +127,8 @@ export {
 	type OverlayMargin,
 	type OverlayOptions,
 	type OverlayUnfocusOptions,
+	REVERSE_VIDEO_OFF,
+	REVERSE_VIDEO_ON,
 	type SizeValue,
 	type TUI,
 	type TuiInputListener,
