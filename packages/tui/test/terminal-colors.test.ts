@@ -55,6 +55,8 @@ class TestTerminal implements Terminal {
 
 	showCursor(): void {}
 
+	setCursorStyle(_style: "default" | "steady-block"): void {}
+
 	clearLine(): void {}
 
 	clearFromCursor(): void {}
